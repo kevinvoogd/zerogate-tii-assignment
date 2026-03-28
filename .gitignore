@@ -1,0 +1,46 @@
+# LaTeX build artifacts (keep latex/ local, never push)
+latex/
+*.aux
+*.fdb_latexmk
+*.fls
+*.toc
+*.log
+*.out
+*.synctex.gz
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+*.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.so
+
+# Conda / venv
+.conda/
+.venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data and results (too large / generated — rsync separately)
+data/
+results/
+
+# Secrets (never commit API keys)
+.env
+*.key

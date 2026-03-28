@@ -1,0 +1,82 @@
+# =============================================================================
+# docker-compose.yml — TienKung: single persistent container
+#
+# Lifecycle:
+#   docker compose up -d   # start
+#   docker exec -it tienkung bash                         # interactive shell
+#
+# Volume strategy:
+#   Bind mounts  — host paths, directly accessible from outside Docker
+#     ~/TienKung-Lab      source code (live editing)
+#     ~/data              GMR inputs only: AMASS .npz + SMPL-X .pkl
+#     ~/results/gmr       GMR outputs: retargeted .pkl + visualizations
+#     ~/results/logs      training checkpoints + TensorBoard event files
+#     ~/results/videos    recorded MP4 policy playbacks
+#     ~/results/datasets  AMP motion data (motion_visualization, motion_amp_expert)
+#   Named volumes — Docker-managed, persistent (Isaac Sim caches)
+#     tienkung-cache-ov            Omniverse/shader cache  (saves 15-30 min on restart)
+#     tienkung-cache-kit           Kit extension cache
+#     tienkung-cache-glcache       OpenGL shader cache
+#     tienkung-cache-computecache  CUDA kernel compute cache
+#
+# Retrieving results:
+#   All outputs land in ~/results/ (user-owned, directly rsync-able).
+#   From your local machine: rsync -avz ubuntu@<brev-ip>:~/results/ ./results/
+#
+# Prerequisites:
+#   docker build -t tienkung-isaaclab:2.1.0 .
+#   (see Dockerfile for NGC login requirements)
+# =============================================================================
+
+services:
+
+  tienkung:
+    image: tienkung-isaaclab:2.1.0
+    container_name: tienkung
+    runtime: nvidia
+    stdin_open: true   # keep container alive for docker exec
+    tty: true
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all,graphics
+      # Required by Isaac Sim EULA
+      - ACCEPT_EULA=Y
+      - PRIVACY_CONSENT=Y
+    ports:
+      - "6006:6006"    # TensorBoard — open http://<brev-ip>:6006 in a browser
+    volumes:
+      # ── Input bind mounts (host filesystem) ───────────────────────────
+      # Source code: host edits reflected immediately inside the container.
+      - ~/TienKung-Lab:/workspace/TienKung-Lab
+      # Input data: AMASS .npz files and SMPL-X body model .pkl files.
+      - ~/data:/workspace/data
+
+      # ── Results bind mounts (~/results/ — user-owned, rsync-able) ─────
+      # GMR retargeting output — read by Phase 4 data conversion.
+      - ~/results/gmr:/workspace/results/gmr
+      # Training checkpoints + TensorBoard event files.
+      - ~/results/logs:/workspace/TienKung-Lab/logs
+      # Recorded policy MP4 videos from play.py --video.
+      - ~/results/videos:/workspace/TienKung-Lab/videos
+      # AMP motion datasets (motion_visualization/, motion_amp_expert/).
+      - ~/results/datasets:/workspace/TienKung-Lab/legged_lab/envs/tienkung/datasets
+
+      # ── Named volumes (Docker-managed Isaac Sim caches) ───────────────
+      # Omniverse / shader cache — avoids 15–30 min recompile on restart.
+      - tienkung-cache-ov:/root/.cache/ov
+      # Kit extension cache — avoids re-fetching extensions on every start.
+      - tienkung-cache-kit:/isaac-sim/kit/cache
+      # OpenGL shader cache.
+      - tienkung-cache-glcache:/root/.cache/nvidia/GLCache
+      # CUDA kernel (compute) cache.
+      - tienkung-cache-computecache:/root/.nv/ComputeCache
+
+    # Keep the container alive without running a training job at startup
+    command: ["sleep", "infinity"]
+
+# ── Named volume declarations ────────────────────────────────────────────
+volumes:
+  tienkung-cache-ov:
+  tienkung-cache-kit:
+  tienkung-cache-glcache:
+  tienkung-cache-computecache:
