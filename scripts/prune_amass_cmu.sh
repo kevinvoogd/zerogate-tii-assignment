@@ -21,6 +21,7 @@
 set -euo pipefail
 
 AMASS_DIR="${1:?Usage: $0 <amass_dir> [path/to/motion_tasks.csv]}"
+AMASS_DIR="${AMASS_DIR%/}"   # strip trailing slash
 MANIFEST="${2:-$(dirname "$0")/motion_tasks.csv}"
 
 if [[ ! -d "$AMASS_DIR" ]]; then
