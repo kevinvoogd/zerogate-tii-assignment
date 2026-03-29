@@ -22,7 +22,7 @@ Provision the Brev VM, log in to NGC, and build the Docker image.
 - Creates `~/data/`, `~/results/` directories
 - Installs Miniconda + creates the `gmr` conda env
 - Applies the SMPLX `.npz` → `.pkl` extension fix
-- Logs in to NGC and builds the Docker image (`NGC_API_KEY` must be set)
+- Logs in to NGC (`org.ngc.nvidia.com`) and builds the Docker image (`NGC_API_KEY` must be set)
 
 Verify everything completed:
 
@@ -39,10 +39,16 @@ docker images | grep tienkung         # must show tienkung-isaaclab:2.1.0
 If `docker images | grep tienkung` shows nothing, run manually:
 
 ```bash
-export NGC_API_KEY=<your key from https://ngc.nvidia.com/setup/api-key>
+export NGC_API_KEY=<your key from https://org.ngc.nvidia.com/setup/api-key>
 
+# Non-interactive (scripting / CI)
 echo "$NGC_API_KEY" | docker login nvcr.io \
     --username '$oauthtoken' --password-stdin
+
+# Interactive (manual login in a terminal)
+# docker login nvcr.io
+#   Username: $oauthtoken          ← literal string, not a shell variable
+#   Password: <paste key here>
 
 docker build -t tienkung-isaaclab:2.1.0 ~/assignment_tii/
 # First build: ~20–40 min. Subsequent builds use cache.
@@ -50,6 +56,10 @@ docker build -t tienkung-isaaclab:2.1.0 ~/assignment_tii/
 
 > **If `isaac-lab:2.1.0` is not on NGC:** uncomment the fallback block in `Dockerfile`
 > (builds Isaac Lab from source on top of `isaac-sim:4.5.0`).
+
+> **Username note:** `$oauthtoken` is a fixed literal string used by all NGC users —
+> it is not a shell variable. Always quote it (`'$oauthtoken'`) or escape the `$`
+> when passing on the command line to prevent shell expansion.
 
 ### 1.4 Verify the image
 

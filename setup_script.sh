@@ -33,9 +33,6 @@ DATA_DIR="$HOME_DIR/data"
 IMAGE_TAG="tienkung-isaaclab:2.1.0"
 
 # NGC_API_KEY is expected from the environment (set in Brev's env vars panel).
-# If absent, NGC login and docker build are skipped with a warning.
-# !! DO NOT hardcode your key here — set it in Brev's "Environment Variables" panel before
-#    creating the instance, or export it on the host before re-running this script.
 NGC_API_KEY="${NGC_API_KEY:-}"  # reads from environment; empty string = skip NGC steps
 
 # ── 1. Clone repos ───────────────────────────────────────────────────────────
