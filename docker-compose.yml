@@ -2,7 +2,7 @@
 # docker-compose.yml — TienKung: single persistent container
 #
 # Lifecycle:
-#   docker compose up -d   # start
+#   docker compose up -d   # start  (run inside an ssh -X session for X11 forwarding)
 #   docker exec -it tienkung bash                         # interactive shell
 #
 # Volume strategy:
@@ -36,16 +36,18 @@ services:
     runtime: nvidia
     stdin_open: true   # keep container alive for docker exec
     tty: true
+    network_mode: host      # X11 forwarding needs host networking (also exposes port 6006)
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all,graphics
       # Required by Isaac Sim EULA
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
+      # X11 forwarding — DISPLAY is inherited from the host SSH session.
+      # When ssh -X sets DISPLAY=localhost:10.0, the container sees it here.
+      - DISPLAY=${DISPLAY}
     cap_add:
       - SYS_PTRACE   # allows cuDeviceGetUuid — resolves Warp CUDA error 36 on vGPU/GRID instances
-    ports:
-      - "6006:6006"    # TensorBoard — open http://<brev-ip>:6006 in a browser
     volumes:
       # ── Input bind mounts (host filesystem) ───────────────────────────
       # Source code: host edits reflected immediately inside the container.
@@ -62,6 +64,12 @@ services:
       - ~/results/videos:/workspace/TienKung-Lab/videos
       # AMP motion datasets (motion_visualization/, motion_amp_expert/).
       - ~/results/datasets:/workspace/TienKung-Lab/legged_lab/envs/tienkung/datasets
+
+      # ── X11 forwarding (host → container) ─────────────────────────────
+      # The X11 Unix socket lets the container talk to the host's X server
+      # (real or forwarded via ssh -X).  .Xauthority carries the auth cookie.
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ~/.Xauthority:/root/.Xauthority:ro
 
       # ── Named volumes (Docker-managed Isaac Sim caches) ───────────────
       # Omniverse / shader cache — avoids 15–30 min recompile on restart.

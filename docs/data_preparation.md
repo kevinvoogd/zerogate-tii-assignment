@@ -399,3 +399,84 @@ automatically. Training will sample uniformly across all clips.
 > **Tip:** You rarely need every clip. A few dozen varied motions (different speeds,
 > directions, subjects) give AMP enough diversity. Start with a representative subset
 > and add more only if the policy fails to generalise.
+
+---
+
+### 4.3 Visualize Motion (Isaac Sim)
+
+`play_amp_animation.py` without `--save_path` opens an Isaac Sim viewport showing
+the robot replaying the retargeted motion. On a headless VM this requires either
+X11 forwarding or a virtual framebuffer.
+
+#### Prerequisites (already included in the updated Dockerfile and docker-compose)
+
+| Change | File | What it does |
+|--------|------|-------------|
+| `xvfb`, `x11-utils`, `libxkbcommon-x11-0` packages | `Dockerfile` | Provides virtual framebuffer + X11 libs inside the container |
+| `network_mode: host` | `docker-compose.yml` | Lets the container reach the host's X11 socket (also exposes TensorBoard on port 6006 directly) |
+| `DISPLAY=${DISPLAY}` env var | `docker-compose.yml` | Passes the host's `$DISPLAY` (set by `ssh -X`) into the container |
+| `/tmp/.X11-unix` + `.Xauthority` volumes | `docker-compose.yml` | Shares the X11 Unix socket and auth cookie with the container |
+
+> **Rebuild required** after pulling these changes:
+> ```bash
+> docker compose down
+> docker build -t tienkung-isaaclab:2.1.0 .
+> ```
+
+#### Option A — X11 forwarding (live GUI on your local machine)
+
+SSH with X11 forwarding enabled, restart the container so it picks up `$DISPLAY`,
+then run the visualization:
+
+```bash
+# On your local machine — connect with X11 forwarding
+ssh -X ubuntu@<brev-ip>
+
+# On the Brev host — restart the container to capture $DISPLAY
+docker compose down && docker compose up -d
+
+# Verify DISPLAY is set inside the container
+docker exec tienkung bash -c 'echo $DISPLAY'
+# Should print something like localhost:10.0
+
+# Visualize walk motion (opens Isaac Sim GUI window forwarded to your screen)
+docker exec -it tienkung \
+    /workspace/isaaclab/isaaclab.sh -p \
+    legged_lab/scripts/play_amp_animation.py \
+    --task=walk --num_envs=1
+```
+
+> **Performance note:** X11 forwarding over the network is usable for visual
+> inspection but will be slow for real-time playback. Use Option B to record
+> a smooth MP4 instead.
+
+#### Option B — Xvfb virtual display + `--video` (record MP4, no network)
+
+`xvfb-run` creates a virtual screen so Isaac Sim can render to the viewport.
+The `--video` flag then captures frames into an MP4:
+
+```bash
+docker exec -w /workspace/TienKung-Lab tienkung \
+    xvfb-run -s "-screen 0 1024x768x24" \
+    /workspace/isaaclab/isaaclab.sh -p \
+    legged_lab/scripts/play_amp_animation.py \
+    --task=walk --num_envs=1 \
+    --video --video_length 300
+```
+
+The MP4 is saved to `/workspace/TienKung-Lab/videos/` inside the container,
+which maps to `~/results/videos/` on the host.
+
+```bash
+# Verify
+ls -lh ~/results/videos/
+
+# Download to your local machine
+rsync -avz ubuntu@<brev-ip>:~/results/videos/ ./videos/
+```
+
+#### Option C — Phase 3 MuJoCo video (no Isaac Sim needed)
+
+The retargeting video from GMR step 3.1 (`~/results/gmr/walk_retarget.mp4`)
+shows the same motion in MuJoCo's viewer. This is already produced during
+Phase 3 and requires no additional steps.

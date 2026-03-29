@@ -22,6 +22,51 @@
 
 ---
 
+## Monitoring a Running Isaac Sim Process
+
+Isaac Sim prints nothing to the terminal for several minutes after the Warp CUDA errors —
+this is **normal**. Use the commands below in a **second terminal** to confirm it is
+alive and making progress.
+
+### Check the kit log (most useful — live Isaac Sim output)
+
+```bash
+docker exec tienkung bash -c "tail -f /isaac-sim/kit/logs/Kit/Isaac-Sim/4.5/kit_*.log"
+```
+
+You'll see extension loading, physics init, and eventually repeated simulation step
+entries. Ctrl+C this tail when done — it does not affect the running simulation.
+
+### Check GPU activity (proves the GPU is working)
+
+```bash
+watch -n2 nvidia-smi
+```
+
+GPU memory climbs and utilisation spikes during shader compilation and simulation.
+Sustained 0 % utilisation + low memory after 10+ minutes indicates a real hang.
+
+### Confirm the process is still alive
+
+```bash
+docker exec tienkung ps aux | grep play_amp
+```
+
+If `play_amp_animation.py` is listed, it is still running. If it is absent, it has
+exited (check the kit log above for the last error).
+
+### Typical startup sequence
+
+| Stage | Duration | What you see |
+|-------|----------|--------------|
+| Warp / display warnings | ~5 s | Three Warp CUDA error lines, then silence |
+| Shader cache compilation | 2–5 min | Silence (GPU memory climbing) |
+| Kit extension loading | 1–2 min | Log lines in `kit_*.log` |
+| Physics + sim init | ~30 s | More log lines, then simulation steps |
+| Video written | after `--video_length` steps | File appears in `~/results/videos/` |
+
+---
+
 ## Interactive Visualization via X11 Forwarding
 
 If you want a **live Isaac Sim window** on your laptop screen instead of downloading an MP4:

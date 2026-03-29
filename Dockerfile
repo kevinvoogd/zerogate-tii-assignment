@@ -18,6 +18,16 @@ FROM nvcr.io/nvidia/isaac-lab:2.1.0
 
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
+# ---------------------------------------------------------------------------
+# X11 + Xvfb — needed for Isaac Sim GUI rendering on headless VMs.
+# xvfb provides a virtual framebuffer so --video can capture rendered frames.
+# x11-utils includes xdpyinfo for verifying the display.
+# libglvnd and EGL are already in the NGC base image.
+# ---------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        xvfb x11-utils libxkbcommon-x11-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN git clone --depth 1 \
         https://github.com/Open-X-Humanoid/TienKung-Lab \
         /workspace/TienKung-Lab
