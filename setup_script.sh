@@ -90,7 +90,6 @@ pip install -e "$GMR_DIR"
 # ── 4. Apply SMPLX extension fix ─────────────────────────────────────────────
 # The smplx package (installed in the gmr conda env) defaults to looking for
 # .npz body model files, but the SMPL-X website ships .pkl files.
-# The fix targets the site-packages install, not the GMR repo clone.
 SMPLX_MODELS="$HOME_DIR/miniconda3/envs/gmr/lib/python3.10/site-packages/smplx/body_models.py"
 if [[ -f "$SMPLX_MODELS" ]]; then
     sed -i "s/ext: str = 'npz'/ext: str = 'pkl'/" "$SMPLX_MODELS"
@@ -101,8 +100,6 @@ else
 fi
 
 # ── 5. Install display utilities (needed for X11 forwarding + xvfb) ────────────
-# xvfb creates a virtual framebuffer — used with MUJOCO_GL=egl as fallback
-# and for X11 forwarding into the Docker container.
 sudo apt-get install -y --no-install-recommends xvfb x11-utils x11-apps
 
 # ── 6. NGC login and Docker image build ──────────────────────────────────────

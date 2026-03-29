@@ -13,9 +13,19 @@ Provision the Brev VM, log in to NGC, and build the Docker image.
 3. Paste the contents of `setup_script.sh` as the setup script
 4. Choose a GPU instance ≥ 24 GB VRAM (e.g. AWS g6e.4xlarge — L40S GPU)
 5. Set disk ≥ **300 GB** (Isaac Sim base image alone is ~15 GB)
-6. No streaming ports or secure links needed
+6. Open ports: **6006** (TensorBoard), **8211** (web viewer), **49100** (WebRTC signaling), **47998** (WebRTC media)
 
-### 1.2 Verify `setup_script.sh` completed (auto-runs on first boot)
+### 1.2 Build the web-viewer image
+
+The `web-viewer` container serves a browser UI for WebRTC livestreaming.
+Build it alongside the main image:
+
+```bash
+cd ~/assignment_tii
+docker compose build web-viewer
+```
+
+### 1.3 Verify `setup_script.sh` completed (auto-runs on first boot)
 
 `setup_script.sh` runs automatically on first boot and does all of the following:
 - Clones `assignment_tii`, `TienKung-Lab`, and `GMR`

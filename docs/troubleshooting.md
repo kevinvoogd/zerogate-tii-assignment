@@ -63,51 +63,43 @@ exited (check the kit log above for the last error).
 | Shader cache compilation | 2–5 min | Silence (GPU memory climbing) |
 | Kit extension loading | 1–2 min | Log lines in `kit_*.log` |
 | Physics + sim init | ~30 s | More log lines, then simulation steps |
-| Video written | after `--video_length` steps | File appears in `~/results/videos/` |
+| WebRTC stream ready | after init | Browser viewport shows Isaac Sim |
 
 ---
 
-## Interactive Visualization via X11 Forwarding
+## WebRTC Livestream Visualization
 
-If you want a **live Isaac Sim window** on your laptop screen instead of downloading an MP4:
+Use `--livestream 2` to stream the Isaac Sim viewport to a browser. The companion
+`web-viewer` container serves a React app that connects to Isaac Sim's WebRTC signaling.
 
-### Step 1 — SSH with X11 forwarding
-
-```bash
-# From your local machine:
-ssh -X ubuntu@<brev-ip>
-
-# Confirm DISPLAY is set:
-echo $DISPLAY   # e.g. localhost:10.0
-```
-
-> macOS users: install [XQuartz](https://www.xquartz.org/) first and use `ssh -X`.
-
-### Step 2 — Copy the auth token into the container
+### Setup
 
 ```bash
-# On the Brev host, get your X auth entry:
-xauth list $DISPLAY
-# Output: <host>/unix:10  MIT-MAGIC-COOKIE-1  <hex-token>
+# 1. Set public IP
+export PUBLIC_IP=$(curl -s ifconfig.me)
 
-# Pass DISPLAY and the X11 socket into the container, add the auth token:
-docker exec \
-    -e DISPLAY=$DISPLAY \
-    -v /tmp/.X11-unix:/tmp/.X11-unix \
-    tienkung bash -c "
-        xauth add $(xauth list $DISPLAY) && \
-        cd /workspace/TienKung-Lab && \
-        /workspace/isaaclab/isaaclab.sh -p \
-            legged_lab/scripts/play_amp_animation.py \
-            --task=walk --num_envs=1"
-# Repeat with --task=run for the run motion.
+# 2. Start both containers
+docker compose up -d
+
+# 3. Run any Isaac Lab script with --livestream 2
+docker exec -w /workspace/TienKung-Lab tienkung \
+    /workspace/isaaclab/isaaclab.sh -p \
+    legged_lab/scripts/play_amp_animation.py \
+    --task=walk --num_envs=1 \
+    --livestream 2
+
+# 4. Open browser at http://<brev-public-ip>:8211
 ```
 
-Isaac Sim renders on the Brev GPU; the window is forwarded to your laptop over SSH.
+### Troubleshooting WebRTC
 
-> **Latency note**: X11 forwarding over SSH can feel sluggish for real-time 3D rendering.
-> The MP4 approach (Phase 6.2) is better for detailed quality review; use X11 when you
-> need interactive control (e.g. to orbit the camera).
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Browser shows blank page | Isaac Sim still loading | Wait 2–5 min for shader compilation; check `docker logs tienkung` |
+| Connection refused on 8211 | web-viewer not running | `docker compose up -d web-viewer` |
+| WebRTC negotiation fails | Ports blocked | Open 49100/tcp (signaling) and 47998/udp (media) on the VM |
+| Black viewport | GPU not rendering | Check `NVIDIA_VISIBLE_DEVICES=all` is set; verify GPU with `nvidia-smi` inside container |
+| PUBLIC_IP not set | Env var missing | `export PUBLIC_IP=$(curl -s ifconfig.me)` then restart: `docker compose down && docker compose up -d` |
 
 ---
 

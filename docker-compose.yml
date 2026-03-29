@@ -1,16 +1,22 @@
 # =============================================================================
-# docker-compose.yml — TienKung: single persistent container
+# docker-compose.yml — TienKung: Isaac Lab training + WebRTC visualization
 #
 # Lifecycle:
-#   docker compose up -d   # start  (run inside an ssh -X session for X11 forwarding)
-#   docker exec -it tienkung bash                         # interactive shell
+#   docker compose up -d                  # start both containers
+#   docker exec -it tienkung bash         # interactive shell
+#
+# Visualization (WebRTC livestream):
+#   Inside tienkung container, run any Isaac Lab script with --livestream 2.
+#   Then open a browser at http://<brev-public-ip>:8211 to see the viewport.
+#   Set PUBLIC_IP in your shell before running docker compose:
+#     export PUBLIC_IP=$(curl -s ifconfig.me)
 #
 # Volume strategy:
 #   Bind mounts  — host paths, directly accessible from outside Docker
 #     ~/TienKung-Lab      source code (live editing)
 #     ~/data              GMR inputs only: AMASS .npz + SMPL-X .pkl
 #     ~/results/gmr       GMR outputs: retargeted .pkl + visualizations
-#     ~/results/logs      training checkpoints + TensorBoard event files
+#     ~/results/logs       training checkpoints + TensorBoard event files
 #     ~/results/videos    recorded MP4 policy playbacks
 #     ~/results/datasets  AMP motion data (motion_visualization, motion_amp_expert)
 #   Named volumes — Docker-managed, persistent (Isaac Sim caches)
@@ -18,6 +24,12 @@
 #     tienkung-cache-kit           Kit extension cache
 #     tienkung-cache-glcache       OpenGL shader cache
 #     tienkung-cache-computecache  CUDA kernel compute cache
+#
+# Ports (all exposed via network_mode: host):
+#   6006   — TensorBoard
+#   8211   — Web viewer (browser UI)
+#   49100  — WebRTC signaling (TCP)
+#   47998  — WebRTC media stream (UDP)
 #
 # Retrieving results:
 #   All outputs land in ~/results/ (user-owned, directly rsync-able).
@@ -36,16 +48,16 @@ services:
     runtime: nvidia
     stdin_open: true   # keep container alive for docker exec
     tty: true
-    network_mode: host      # X11 forwarding needs host networking (also exposes port 6006)
+    network_mode: host      # required for WebRTC UDP binding + TensorBoard on 6006
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all,graphics
       # Required by Isaac Sim EULA
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
-      # X11 forwarding — DISPLAY is inherited from the host SSH session.
-      # When ssh -X sets DISPLAY=localhost:10.0, the container sees it here.
-      - DISPLAY=${DISPLAY}
+      # WebRTC livestream — set PUBLIC_IP to VM's public IP before `docker compose up`.
+      # AppLauncher reads this env var when --livestream 2 is passed.
+      - PUBLIC_IP=${PUBLIC_IP:-127.0.0.1}
     cap_add:
       - SYS_PTRACE   # allows cuDeviceGetUuid — resolves Warp CUDA error 36 on vGPU/GRID instances
     volumes:
@@ -65,12 +77,6 @@ services:
       # AMP motion datasets (motion_visualization/, motion_amp_expert/).
       - ~/results/datasets:/workspace/TienKung-Lab/legged_lab/envs/tienkung/datasets
 
-      # ── X11 forwarding (host → container) ─────────────────────────────
-      # The X11 Unix socket lets the container talk to the host's X server
-      # (real or forwarded via ssh -X).  .Xauthority carries the auth cookie.
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ~/.Xauthority:/root/.Xauthority:ro
-
       # ── Named volumes (Docker-managed Isaac Sim caches) ───────────────
       # Omniverse / shader cache — avoids 15–30 min recompile on restart.
       - tienkung-cache-ov:/root/.cache/ov
@@ -84,9 +90,17 @@ services:
     # Keep the container alive without running a training job at startup
     command: ["sleep", "infinity"]
 
-# ── Named volume declarations ────────────────────────────────────────────
-volumes:
-  tienkung-cache-ov:
-  tienkung-cache-kit:
-  tienkung-cache-glcache:
-  tienkung-cache-computecache:
+  # ── WebRTC web viewer — browser-based Isaac Sim viewport ──────────────
+  # Lightweight container that serves a React app connecting to Isaac Sim's
+  # WebRTC signaling server. Open http://<public-ip>:8211 in your browser.
+  web-viewer:
+    build:
+      context: ./web-viewer
+    container_name: web-viewer
+    network_mode: host      # must share network with tienkung for WebRTC
+    environment:
+      - SIGNALING_SERVER=${PUBLIC_IP:-127.0.0.1}
+      - SIGNALING_PORT=49100
+      - MEDIA_SERVER=${PUBLIC_IP:-127.0.0.1}
+      - WEB_PORT=8211
+    restart: unless-stopped

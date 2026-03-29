@@ -1,6 +1,6 @@
 # TienKung Humanoid Training on NVIDIA Brev
 
-End-to-end pipeline for training the TienKung humanoid locomotion policy on a Brev cloud GPU instance. Everything runs headless inside a Docker container; policy playbacks are recorded to MP4 via Isaac Sim's offscreen renderer.
+End-to-end pipeline for training the TienKung humanoid locomotion policy on a Brev cloud GPU instance. Training runs headless inside a Docker container; live visualization uses WebRTC livestreaming (`--livestream 2`) viewed in a browser via a companion `web-viewer` container.
 
 ---
 
@@ -10,7 +10,7 @@ End-to-end pipeline for training the TienKung humanoid locomotion policy on a Br
 |---|---|
 | `setup_script.sh` | Brev VM bootstrap — paste into Brev's setup script field; runs on first boot |
 | `Dockerfile` | Builds `tienkung-isaaclab:2.1.0` with TienKung + RSL_RL baked in |
-| `docker-compose.yml` | Single persistent container + bind mounts for all outputs to `~/results/` |
+| `docker-compose.yml` | Training container + web-viewer for WebRTC visualization; all outputs bind-mounted to `~/results/` |
 | `docs/architecture.md` | Assumptions, constraints, system diagram, data flow |
 | `docs/installation.md` | Phase 1 — Brev VM setup, NGC login, image build & verify |
 | `docs/data_preparation.md` | Phases 2–4 — AMASS download, GMR retargeting, AMP data conversion |
@@ -51,9 +51,14 @@ Brev Host VM
 Docker container: tienkung  (tienkung-isaaclab:2.1.0)
 ├── Isaac Lab  2.1.0  +  Isaac Sim  4.5.0
 ├── TienKung-Lab + RSL_RL baked in at build time
+├── --livestream 2 → WebRTC on ports 49100 (signaling) + 47998 (media)
 └── Bind mounts:  ~/results/* → /workspace/results/*
                   ~/TienKung-Lab → /workspace/TienKung-Lab
                   ~/data        → /workspace/data
+
+Docker container: web-viewer  (Node.js/React)
+├── NVIDIA web-viewer-sample  (built at image time)
+└── Serves browser UI on port 8211 → connects to WebRTC signaling
 ```
 
 **Data flow:**
@@ -305,12 +310,18 @@ Open `http://<brev-ip>:6006` in your browser (port 6006 is already mapped in `do
 
 ---
 
-## Phase 6 — Policy Playback and Video Recording
+## Phase 6 — Policy Playback and Visualization
 
-Isaac Sim's offscreen GPU renderer encodes MP4s without a display. Videos land in
-`~/results/videos/` on the Brev host.
+Use `--livestream 2` to stream Isaac Sim's viewport to your browser via WebRTC.
+The companion `web-viewer` container serves the viewer at `http://<brev-ip>:8211`.
 
-### 6.1 Record walk policy
+Before running, ensure `PUBLIC_IP` is set and both containers are up:
+```bash
+export PUBLIC_IP=$(curl -s ifconfig.me)
+docker compose up -d
+```
+
+### 6.1 Play walk policy (live in browser)
 
 ```bash
 # Latest training checkpoint
@@ -318,7 +329,7 @@ docker exec -w /workspace/TienKung-Lab tienkung \
     /workspace/isaaclab/isaaclab.sh -p \
     legged_lab/scripts/play.py \
     --task=walk --num_envs=1 \
-    --headless --video --video_length 500 \
+    --livestream 2 \
     --checkpoint logs/walk/<timestamp>/model_<iter>.pt
 
 # Pre-trained policy bundled in repo
@@ -326,9 +337,11 @@ docker exec -w /workspace/TienKung-Lab tienkung \
     /workspace/isaaclab/isaaclab.sh -p \
     legged_lab/scripts/play.py \
     --task=walk --num_envs=1 \
-    --headless --video --video_length 500 \
+    --livestream 2 \
     --checkpoint Exported_policy/walk.pt
 ```
+
+Open `http://<brev-ip>:8211` in your browser to see the viewport.
 
 ### 6.2 Sim2Sim transfer (MuJoCo)
 
@@ -431,12 +444,15 @@ docker exec tienkung \
     --logdir /workspace/TienKung-Lab/logs --host 0.0.0.0 --port 6006
 # open http://<brev-ip>:6006
 
-# ── Playback + video ──────────────────────────────────────────────────
+# ── Playback (live browser via WebRTC) ─────────────────────────────────
+export PUBLIC_IP=$(curl -s ifconfig.me)
+docker compose up -d   # ensure web-viewer is running
 docker exec -w /workspace/TienKung-Lab tienkung \
     /workspace/isaaclab/isaaclab.sh -p \
     legged_lab/scripts/play.py \
-    --task=walk --num_envs=1 --headless --video --video_length 500 \
+    --task=walk --num_envs=1 --livestream 2 \
     --checkpoint Exported_policy/walk.pt
+# open http://<brev-ip>:8211
 
 # ── Download results (run from your local machine) ────────────────────
 rsync -avz --progress ubuntu@<brev-ip>:~/results/ ./results/
@@ -452,7 +468,7 @@ rsync -avz --progress ubuntu@<brev-ip>:~/results/ ./results/
 | `docker login nvcr.io` rejected | Wrong credentials | Username must be literally `$oauthtoken`; password is your NGC API key |
 | `ModuleNotFoundError: legged_lab` | Volume mount shadowed baked-in install | `docker exec ... pip install -e /workspace/TienKung-Lab` |
 | GMR `KeyError` on SMPLX data | Wrong ext setting | Re-run the Phase 2.5 `sed` fix |
-| `--video` flag not recognised | Flag not in TienKung 2.1 | Wrap with `gym.wrappers.RecordVideo` (see `docs/training.md`) |
+| WebRTC connection fails | Ports blocked | Open 8211/tcp, 49100/tcp, 47998/udp on Brev instance |
 | TensorBoard port unreachable | Brev security group | Open port 6006 in the Brev instance network settings |
 | Reward does not converge | Too few envs or bad AMP data | Increase `--num_envs`; verify motion quality with `play_amp_animation.py` first |
 

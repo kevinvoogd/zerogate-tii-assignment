@@ -402,80 +402,72 @@ automatically. Training will sample uniformly across all clips.
 
 ---
 
-### 4.3 Visualize Motion (Isaac Sim)
+### 4.3 Visualize Motion (WebRTC Livestream)
 
 `play_amp_animation.py` without `--save_path` opens an Isaac Sim viewport showing
-the robot replaying the retargeted motion. On a headless VM this requires either
-X11 forwarding or a virtual framebuffer.
+the robot replaying the retargeted motion. On a headless VM we use **WebRTC
+livestreaming** (`--livestream 2`) to stream the viewport to a browser.
 
-#### Prerequisites (already included in the updated Dockerfile and docker-compose)
+The `docker-compose.yml` includes a lightweight `web-viewer` container that serves
+a React app connecting to Isaac Sim's WebRTC signaling server. No X11 forwarding
+or virtual framebuffer required.
 
-| Change | File | What it does |
-|--------|------|-------------|
-| `xvfb`, `x11-utils`, `libxkbcommon-x11-0` packages | `Dockerfile` | Provides virtual framebuffer + X11 libs inside the container |
-| `network_mode: host` | `docker-compose.yml` | Lets the container reach the host's X11 socket (also exposes TensorBoard on port 6006 directly) |
-| `DISPLAY=${DISPLAY}` env var | `docker-compose.yml` | Passes the host's `$DISPLAY` (set by `ssh -X`) into the container |
-| `/tmp/.X11-unix` + `.Xauthority` volumes | `docker-compose.yml` | Shares the X11 Unix socket and auth cookie with the container |
+#### Prerequisites
 
-> **Rebuild required** after pulling these changes:
+| Requirement | How |
+|-------------|-----|
+| Containers running | `docker compose up -d` (both `tienkung` and `web-viewer`) |
+| `PUBLIC_IP` set | `export PUBLIC_IP=$(curl -s ifconfig.me)` before `docker compose up` |
+| Ports open | 8211 (web viewer), 49100 (WebRTC signaling), 47998 (WebRTC media) |
+
+> **Rebuild required** if you just pulled these changes:
 > ```bash
 > docker compose down
 > docker build -t tienkung-isaaclab:2.1.0 .
+> docker compose build web-viewer
+> export PUBLIC_IP=$(curl -s ifconfig.me)
+> docker compose up -d
 > ```
 
-#### Option A — X11 forwarding (live GUI on your local machine)
-
-SSH with X11 forwarding enabled, restart the container so it picks up `$DISPLAY`,
-then run the visualization:
+#### Step 1 — Set PUBLIC_IP and start containers
 
 ```bash
-# On your local machine — connect with X11 forwarding
-ssh -X ubuntu@<brev-ip>
-
-# On the Brev host — restart the container to capture $DISPLAY
-docker compose down && docker compose up -d
-
-# Verify DISPLAY is set inside the container
-docker exec tienkung bash -c 'echo $DISPLAY'
-# Should print something like localhost:10.0
-
-# Visualize walk motion (opens Isaac Sim GUI window forwarded to your screen)
-docker exec -it tienkung \
-    /workspace/isaaclab/isaaclab.sh -p \
-    legged_lab/scripts/play_amp_animation.py \
-    --task=walk --num_envs=1
+# On the Brev host
+export PUBLIC_IP=$(curl -s ifconfig.me)
+docker compose up -d
 ```
 
-> **Performance note:** X11 forwarding over the network is usable for visual
-> inspection but will be slow for real-time playback. Use Option B to record
-> a smooth MP4 instead.
-
-#### Option B — Xvfb virtual display + `--video` (record MP4, no network)
-
-`xvfb-run` creates a virtual screen so Isaac Sim can render to the viewport.
-The `--video` flag then captures frames into an MP4:
+#### Step 2 — Run visualization with --livestream 2
 
 ```bash
 docker exec -w /workspace/TienKung-Lab tienkung \
-    xvfb-run -s "-screen 0 1024x768x24" \
     /workspace/isaaclab/isaaclab.sh -p \
     legged_lab/scripts/play_amp_animation.py \
     --task=walk --num_envs=1 \
-    --video --video_length 300
+    --livestream 2
 ```
 
-The MP4 is saved to `/workspace/TienKung-Lab/videos/` inside the container,
-which maps to `~/results/videos/` on the host.
+Isaac Sim will start, load the robot and motion data, and begin streaming the
+viewport via WebRTC. The first launch takes 2–5 minutes while shaders compile
+(cached on subsequent runs).
 
-```bash
-# Verify
-ls -lh ~/results/videos/
+#### Step 3 — Open in browser
 
-# Download to your local machine
-rsync -avz ubuntu@<brev-ip>:~/results/videos/ ./videos/
+Navigate to:
+```
+http://<brev-public-ip>:8211
 ```
 
-#### Option C — Phase 3 MuJoCo video (no Isaac Sim needed)
+You should see the Isaac Sim viewport with the robot replaying the retargeted motion.
+The web viewer connects to the WebRTC signaling server at port 49100 automatically.
+
+> **Troubleshooting:**
+> - If the browser shows a blank page, wait for Isaac Sim to finish loading (check
+>   container logs: `docker logs tienkung`).
+> - If connection fails, verify ports 8211, 49100, and 47998 are open on the VM.
+> - For local testing (same machine), use `PUBLIC_IP=127.0.0.1`.
+
+#### Alternative — Phase 3 MuJoCo video (no Isaac Sim needed)
 
 The retargeting video from GMR step 3.1 (`~/results/gmr/walk_retarget.mp4`)
 shows the same motion in MuJoCo's viewer. This is already produced during

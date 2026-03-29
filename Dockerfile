@@ -1,32 +1,16 @@
 # =============================================================================
 # TienKung-Lab + Isaac Lab 2.1.0 
 #
-# Strategy: headless training + Isaac Sim built-in video recorder for playback.
-# No browser viewer needed. Checkpoints and videos are written to host via volumes.
+# Strategy: headless training + WebRTC livestream for visualization.
+# Training runs headless; visualization uses --livestream 2 to stream the Isaac Sim viewport to a browser via a companion web-viewer container.
+# Checkpoints are written to host via volumes.
 #
 # Prerequisites:
-#   docker login nvcr.io
-#     Username: $oauthtoken
-#     Password: <NGC API key from https://ngc.nvidia.com/setup/api-key>
-#
-# Build:
-#   docker build -t tienkung-isaaclab:2.1.0 .
-#
-# First build: ~20-40 min (pulls ~15 GB Isaac Sim base layer).
-# Subsequent builds: fast (cached).
+#     NGC API key from https://ngc.nvidia.com/setup/api-key
+
 FROM nvcr.io/nvidia/isaac-lab:2.1.0
 
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
-
-# ---------------------------------------------------------------------------
-# X11 + Xvfb — needed for Isaac Sim GUI rendering on headless VMs.
-# xvfb provides a virtual framebuffer so --video can capture rendered frames.
-# x11-utils includes xdpyinfo for verifying the display.
-# libglvnd and EGL are already in the NGC base image.
-# ---------------------------------------------------------------------------
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        xvfb x11-utils libxkbcommon-x11-0 \
-    && rm -rf /var/lib/apt/lists/*
 
 RUN git clone --depth 1 \
         https://github.com/Open-X-Humanoid/TienKung-Lab \

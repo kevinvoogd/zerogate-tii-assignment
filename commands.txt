@@ -1,0 +1,49 @@
+# ─── Phase 4 Commands (run inside the container) ───────────────────────────
+
+# 1. Generate AMP expert data (text file for training)
+/workspace/isaaclab/isaaclab.sh -p \
+    legged_lab/scripts/play_amp_animation.py \
+    --task=walk --num_envs=1 \
+    --headless \
+    --save_path legged_lab/envs/tienkung/datasets/motion_amp_expert/walk.txt \
+    --fps 30.0
+
+# 2. Verify the AMP expert output
+head -10 legged_lab/envs/tienkung/datasets/motion_amp_expert/walk.txt
+
+# ─── Visualize motion (WebRTC livestream) ──────────────────────────────────
+#
+# The --livestream 2 flag streams Isaac Sim's viewport via WebRTC.
+# A companion web-viewer container serves a browser UI at port 8211.
+#
+# Step 1: Set PUBLIC_IP and start containers (on Brev host)
+export PUBLIC_IP=$(curl -s ifconfig.me)
+docker compose up -d
+
+# Step 2: Run visualization inside the container
+docker exec -w /workspace/TienKung-Lab tienkung \
+    /workspace/isaaclab/isaaclab.sh -p \
+    legged_lab/scripts/play_amp_animation.py \
+    --task=walk --num_envs=1 \
+    --livestream 2
+
+# Step 3: Open browser at http://<brev-public-ip>:8211
+
+# ─── Phase 3 MuJoCo video (alternative — run on Brev host) ─────────────────
+
+# Record retargeting video with GMR + MuJoCo
+conda activate gmr
+cd ~/GMR
+MUJOCO_GL=egl python scripts/smplx_to_robot.py \
+    --smplx_file ~/data/amass/CMU/01/01_01_poses.npz \
+    --robot tienkung \
+    --save_path ~/results/gmr/tienkung_walk.pkl \
+    --record_video --video_path ~/results/gmr/walk_retarget.mp4
+
+# ─── Download from Brev to local machine ───────────────────────────────────
+
+# GMR retargeting video
+rsync -avz ubuntu@<brev-ip>:~/results/gmr/walk_retarget.mp4 ./
+
+# AMP expert data
+rsync -avz ubuntu@<brev-ip>:~/results/datasets/ ./datasets/
