@@ -58,6 +58,8 @@ services:
       # WebRTC livestream — set PUBLIC_IP to VM's public IP before `docker compose up`.
       # AppLauncher reads this env var when --livestream 2 is passed.
       - PUBLIC_IP=${PUBLIC_IP:-127.0.0.1}
+      # Xvfb virtual display for pynput/MuJoCo (sim2sim.py)
+      - DISPLAY=:99
     cap_add:
       - SYS_PTRACE   # allows cuDeviceGetUuid — resolves Warp CUDA error 36 on vGPU/GRID instances
     volumes:
@@ -76,6 +78,9 @@ services:
       - ~/results/videos:/workspace/TienKung-Lab/videos
       # AMP motion datasets (motion_visualization/, motion_amp_expert/).
       - ~/results/datasets:/workspace/TienKung-Lab/legged_lab/envs/tienkung/datasets
+
+      # ── X11 socket (Xvfb on host) — needed by sim2sim.py / MuJoCo ────
+      - /tmp/.X11-unix:/tmp/.X11-unix
 
       # ── Named volumes (Docker-managed Isaac Sim caches) ───────────────
       # Omniverse / shader cache — avoids 15–30 min recompile on restart.
