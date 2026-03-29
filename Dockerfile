@@ -36,20 +36,15 @@ RUN /workspace/isaaclab/isaaclab.sh -p -m pip install -e /workspace/TienKung-Lab
 #
 # Fix 1 (surgical) — wrap the offending import so the extension loads with a
 # warning instead of raising and killing the whole AppLauncher.
+# Uses sed to avoid multi-line string quoting issues in the Dockerfile parser.
 # ---------------------------------------------------------------------------
-RUN python3 -c "
-import pathlib
-f = pathlib.Path('/workspace/isaaclab/source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/stack/config/franka/stack_ik_rel_blueprint_env_cfg.py')
-if f.exists():
-    src = f.read_text()
-    old = 'from torchvision.utils import save_image'
-    new = 'try:\n    from torchvision.utils import save_image\nexcept Exception:\n    save_image = None  # IL 2.1 extscache torchvision/torch mismatch'
-    if old in src and new not in src:
-        f.write_text(src.replace(old, new))
-        print('patched stack_ik_rel_blueprint_env_cfg.py')
-    else:
-        print('already patched or file changed — skipping')
-" || true
+RUN FILE=/workspace/isaaclab/source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/stack/config/franka/stack_ik_rel_blueprint_env_cfg.py && \
+    if [ -f "$FILE" ] && grep -q '^from torchvision.utils import save_image$' "$FILE"; then \
+        sed -i 's/^from torchvision.utils import save_image$/try:\n    from torchvision.utils import save_image\nexcept Exception:\n    save_image = None  # IL 2.1 extscache mismatch/' "$FILE" \
+        && echo "patched torchvision import in $FILE"; \
+    else \
+        echo "torchvision patch: already applied or file not found — skipping"; \
+    fi || true
 
 # Fix 2 (belt-and-suspenders) — append valid TOML to every kit app config that
 # exists so the extension is also disabled at the extension-manager level.
