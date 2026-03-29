@@ -48,11 +48,13 @@ RUN FILE=/workspace/isaaclab/source/isaaclab_tasks/isaaclab_tasks/manager_based/
 
 # Fix 2 (belt-and-suspenders) — append valid TOML to every kit app config that
 # exists so the extension is also disabled at the extension-manager level.
+# Extension ID is "isaaclab_tasks" (matches [ext: isaaclab_tasks-0.10.31] in logs),
+# NOT "omni.isaac.lab_tasks" — the dot-separated form is wrong and silently ignored.
 RUN for KIT in \
         /workspace/isaaclab/apps/isaaclab.python.headless.kit \
         /workspace/isaaclab/apps/isaaclab.python.headless.rendering.kit \
         /workspace/isaaclab/apps/isaaclab.python.kit; do \
-    [ -f "$KIT" ] && printf '\n[settings]\nexts."omni.isaac.lab_tasks".enabled = false\n' >> "$KIT" && echo "disabled isaaclab_tasks in $KIT"; \
+    [ -f "$KIT" ] && printf '\n[settings]\nexts."isaaclab_tasks".enabled = false\n' >> "$KIT" && echo "disabled isaaclab_tasks in $KIT"; \
     done || true
 
 # ---------------------------------------------------------------------------
