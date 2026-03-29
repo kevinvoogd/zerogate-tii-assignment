@@ -94,30 +94,55 @@ docker exec -w /workspace/TienKung-Lab tienkung \
 
 Output: `~/results/videos/walk_<timestamp>.mp4`
 
-### 6.2 Record AMP Motion Visualization (quality check)
+### 6.2 AMP Motion Visualization — watch the expert motion on the robot
 
-Verify the GMR retargeting result before or after training:
+These commands replay the AMP reference motion on the TienKung robot inside Isaac Sim
+and record it to MP4. Run them **after Phase 4** (motion datasets must exist).
+
+The `torchvision::nms`, Warp CUDA, and `failed to open the default display` lines in
+the startup log are **non-fatal and expected** — they appear before Isaac Sim fully
+loads but do not affect playback or video recording.
+
 ```bash
+# Walk AMP motion replay
 docker exec -w /workspace/TienKung-Lab tienkung \
     /workspace/isaaclab/isaaclab.sh -p \
     legged_lab/scripts/play_amp_animation.py \
     --task=walk --num_envs=1 \
     --headless --video --video_length 300
+
+# Run AMP motion replay
+docker exec -w /workspace/TienKung-Lab tienkung \
+    /workspace/isaaclab/isaaclab.sh -p \
+    legged_lab/scripts/play_amp_animation.py \
+    --task=run --num_envs=1 \
+    --headless --video --video_length 300
 ```
 
-Output: `~/results/videos/walk_amp_<timestamp>.mp4`
+Outputs: `~/results/videos/walk_amp_<timestamp>.mp4`, `~/results/videos/run_amp_<timestamp>.mp4`
 
-> **If `--video` flag is not supported by TienKung's `play.py`:**
-> Isaac Lab's `play.py` scripts may not expose `--video` directly. In that case, wrap
-> the environment with `gym.wrappers.RecordVideo`:
+```bash
+# Verify video was written (should appear within a few minutes of the run finishing):
+ls -lh ~/results/videos/
+```
+
+Download to your local machine to view:
+```bash
+# From your local machine:
+rsync -avz ubuntu@<brev-ip>:~/results/videos/ ./videos/
+# Then open with any video player (VLC, mpv, QuickTime, etc.)
+```
+
+> **If `--video` is not accepted by `play_amp_animation.py`** (flag availability varies
+> across Isaac Lab versions), patch the script to wrap the env with `RecordVideo`:
 > ```python
-> # Add after env creation in play.py:
+> # Add after env creation in play_amp_animation.py:
 > import gymnasium as gym
 > env = gym.wrappers.RecordVideo(
 >     env, video_folder="videos/", episode_trigger=lambda ep: True
 > )
 > ```
-> Or use Isaac Lab's native `--enable_cameras` + `--video` flags if available in 2.1.0.
+> Or try Isaac Lab's native `--enable_cameras` flag if available in your build.
 
 ### 6.3 Sim2Sim Transfer (MuJoCo)
 

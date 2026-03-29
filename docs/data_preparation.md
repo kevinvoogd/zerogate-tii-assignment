@@ -140,16 +140,32 @@ Run on one file first to confirm the retargeting looks correct and record the vi
 conda activate gmr
 cd ~/GMR
 
-python scripts/smplx_to_robot.py \
+# On the headless Brev VM, MuJoCo needs an offscreen GL backend.
+# MUJOCO_GL=egl works on all Brev NVIDIA GPU instances (no display required).
+MUJOCO_GL=egl python scripts/smplx_to_robot.py \
     --smplx_file ~/data/amass/CMU/01/01_01_poses.npz \
     --robot tienkung \
     --save_path ~/results/gmr/tienkung_walk.pkl \
     --record_video --video_path ~/results/gmr/walk_retarget.mp4
 ```
 
-Opens a MuJoCo visualization window and saves the MP4 to `~/results/gmr/`.
-Remove `--record_video` if running headlessly (no display).
+Saves the MP4 to `~/results/gmr/` without needing a display.
 The `.mp4` is the **intermediate result** for the motion retargeting stage.
+
+> **If EGL is unavailable** (error: `Failed to initialize OpenGL`), install osmesa and use the software renderer:
+> ```bash
+> sudo apt-get install -y libosmesa6-dev
+> MUJOCO_GL=osmesa python scripts/smplx_to_robot.py \
+>     --smplx_file ~/data/amass/CMU/01/01_01_poses.npz \
+>     --robot tienkung \
+>     --save_path ~/results/gmr/tienkung_walk.pkl \
+>     --record_video --video_path ~/results/gmr/walk_retarget.mp4
+> ```
+>
+> Download to your local machine to view:
+> ```bash
+> rsync -avz ubuntu@<brev-ip>:~/results/gmr/walk_retarget.mp4 ./
+> ```
 
 ### 3.2 Batch — whole dataset folder at once
 
@@ -341,12 +357,23 @@ for pkl in $(find ~/results/gmr -name '*.pkl'); do
     # Skip clips not listed in the manifest
     [[ -z "$TASK" ]] && { echo "Skip [unlisted]: ${base}"; continue; }
 
+    # Ensure output directories exist inside the container
+    docker exec tienkung mkdir -p \
+        /workspace/TienKung-Lab/legged_lab/envs/tienkung/datasets/motion_visualization \
+        /workspace/TienKung-Lab/legged_lab/envs/tienkung/datasets/motion_amp_expert
+
     # Step A — visualization format
     docker exec -w /workspace/TienKung-Lab tienkung \
         /workspace/isaaclab/isaaclab.sh -p \
         legged_lab/scripts/gmr_data_conversion.py \
         --input_pkl "/workspace/results/gmr/${rel}" \
         --output_txt "legged_lab/envs/tienkung/datasets/motion_visualization/${base}.txt"
+
+    # Point walk.txt / run.txt at this clip — play_amp_animation.py reads the task
+    # config which hardcodes amp_motion_files_display → {task}.txt (not the clip file).
+    docker exec tienkung ln -sf \
+        "/workspace/TienKung-Lab/legged_lab/envs/tienkung/datasets/motion_visualization/${base}.txt" \
+        "/workspace/TienKung-Lab/legged_lab/envs/tienkung/datasets/motion_visualization/${TASK}.txt"
 
     # Step B — AMP expert data (task selects env config + obs space)
     docker exec -w /workspace/TienKung-Lab tienkung \
@@ -362,7 +389,8 @@ done
 
 Verify the populated folders:
 ```bash
-ls ~/results/datasets/motion_amp_expert/ | wc -l    # should match number of pkl files
+ls ~/results/datasets/motion_visualization/ | wc -l   # should match number of listed clips
+ls ~/results/datasets/motion_amp_expert/    | wc -l   # should match number of listed clips
 ```
 
 No config change is needed — `motion_loader.py` picks up all files in the folder

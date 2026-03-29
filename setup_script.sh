@@ -100,7 +100,12 @@ else
     echo "         Run manually after setup: see README.md Phase 2.5"
 fi
 
-# ── 5. NGC login and Docker image build ──────────────────────────────────────
+# ── 5. Install display utilities (needed for X11 forwarding + xvfb) ────────────
+# xvfb creates a virtual framebuffer — used with MUJOCO_GL=egl as fallback
+# and for X11 forwarding into the Docker container.
+sudo apt-get install -y --no-install-recommends xvfb x11-utils x11-apps
+
+# ── 6. NGC login and Docker image build ──────────────────────────────────────
 if [[ -z "$NGC_API_KEY" ]]; then
     echo ""
     echo "WARNING: NGC_API_KEY is not set."

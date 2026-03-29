@@ -27,6 +27,40 @@ RUN /workspace/isaaclab/isaaclab.sh -p -m pip install -e /workspace/TienKung-Lab
 RUN /workspace/isaaclab/isaaclab.sh -p -m pip install -e /workspace/TienKung-Lab/rsl_rl
 
 # ---------------------------------------------------------------------------
+# Disable isaaclab_tasks extension — it fails to load because the extscache
+# torchvision (omni.isaac.ml_archive-2.1.2) was built against a different
+# PyTorch than the one bundled in Isaac Lab's Python, causing:
+#   RuntimeError: operator torchvision::nms does not exist
+# TienKung only uses legged_lab; isaaclab_tasks is never needed.
+# Without this fix, play_amp_animation.py crashes during AppLauncher startup.
+#
+# Fix 1 (surgical) — wrap the offending import so the extension loads with a
+# warning instead of raising and killing the whole AppLauncher.
+# ---------------------------------------------------------------------------
+RUN python3 -c "
+import pathlib
+f = pathlib.Path('/workspace/isaaclab/source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/stack/config/franka/stack_ik_rel_blueprint_env_cfg.py')
+if f.exists():
+    src = f.read_text()
+    old = 'from torchvision.utils import save_image'
+    new = 'try:\n    from torchvision.utils import save_image\nexcept Exception:\n    save_image = None  # IL 2.1 extscache torchvision/torch mismatch'
+    if old in src and new not in src:
+        f.write_text(src.replace(old, new))
+        print('patched stack_ik_rel_blueprint_env_cfg.py')
+    else:
+        print('already patched or file changed — skipping')
+" || true
+
+# Fix 2 (belt-and-suspenders) — append valid TOML to every kit app config that
+# exists so the extension is also disabled at the extension-manager level.
+RUN for KIT in \
+        /workspace/isaaclab/apps/isaaclab.python.headless.kit \
+        /workspace/isaaclab/apps/isaaclab.python.headless.rendering.kit \
+        /workspace/isaaclab/apps/isaaclab.python.kit; do \
+    [ -f "$KIT" ] && printf '\n[settings]\nexts."omni.isaac.lab_tasks".enabled = false\n' >> "$KIT" && echo "disabled isaaclab_tasks in $KIT"; \
+    done || true
+
+# ---------------------------------------------------------------------------
 # Output directories (will be bind-mounted from host — created here as targets)
 # ---------------------------------------------------------------------------
 RUN mkdir -p \
